@@ -4,51 +4,72 @@ import (
 	"errors"
 	"flag"
 	"os"
-	"strconv"
 )
 
-type toolFlags struct {
-	mode       string
-	pokemon    string
-	tier       string
-	generation string
-	statURL    string
-	weighting  int64
-}
-
-// getFlags retrieves flags and arguments to use
-func getFlags() (*toolFlags, error) {
-	flags := &toolFlags{}
+// getArguments retrieves command line arguments and flags
+// it returns first the mode as a string, then a slice of string arguments,
+// then a slice of int64 flags, and finally an error if one occurred
+func getArguments() (string, []string, []int64, error) {
 
 	if len(os.Args) < 2 { // first arg is always filepath of executable
-		return nil, errors.New("no arguments specified")
+		return "", nil, nil, errors.New("no arguments specified")
 	}
 
-	// Define flags
-	flags.mode = *flag.String("mode", "moves", "The mode to run Smogon Stat Tool in")
-	flags.pokemon = *flag.String("pokemon", "pikachu", "The Pokemon to get stats for")
-	flags.tier = *flag.String("tier", overused, "The tier to get stats from")
-	flags.generation = *flag.String("generation", "gen8", "The generation to get stats from")
-	flags.statURL = *flag.String("url", "", "An override URL to pull stats from")
-	flags.weighting = int64(*flag.Int("weighting", skilled, "The player skill level to draw stats from"))
+	// Define and parse flags first to leave us only the other arguments
+	flags := getFlags()
+
+	// Get remaining arguments and validate and separate mode
+	args := flag.Args()
+
+	mode, otherArgs, err := parseMode(args)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	return mode, otherArgs, flags, nil
+}
+
+// defineFlags defines all accepted flags against the default CommandLine flagSet
+func defineFlags() map[int64]bool {
+	flags := make(map[int64]bool)
+
+	flags[forcePathGen] = *flag.Bool("forcePathGen", false, "Force SST to traverse the smogon stats folder with GET requests instead of guessing the path to the file first")
+
+	return flags
+}
+
+// getFlags retrieves flags in the form of a slice of int64s
+// It expects flags to have already been defined on the default flagSet
+func getFlags() []int64 {
+
+	flagsMap := defineFlags()
 
 	flag.Parse()
 
-	// If no flags are defined, default to quick move lookup mode using arguments
-	if flag.NFlag() == 0 {
-		flags.pokemon = flag.Arg(0)
-		flags.tier = flag.Arg(1)
-		weighting, err := strconv.ParseInt(flag.Arg(2), 10, 0)
-		if err != nil {
-			return &toolFlags{}, err
+	var flags []int64
+	for flag, present := range flagsMap {
+		if present {
+			flags = append(flags, flag)
 		}
-		flags.weighting = weighting
 	}
 
-	return flags, nil
+	return flags
 }
 
-// format returns generation + tier
-func (f *toolFlags) format() string {
-	return f.generation + f.tier
+// parseMode takes a slice of string arguments, extracts and verifies the first item as a valid mode,
+// and then returns the mode and remaining arguments
+func parseMode(arguments []string) (string, []string, error) {
+
+	if len(arguments) < 1 {
+		return "", nil, errors.New("no arguments provided, only flags")
+	}
+
+	mode, otherArgs := arguments[0], arguments[1:]
+
+	switch {
+	case contains(movesStrings, mode):
+		return "moves", otherArgs, nil
+	default:
+		return "", nil, errors.New("mode not recognised")
+	}
 }
