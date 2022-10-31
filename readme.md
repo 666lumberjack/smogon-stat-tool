@@ -26,7 +26,7 @@ One flag is currently implemented, `--forcePathGen`. If provided, SST will alway
     go run . m jirachi ou 1700 gen3
 This command would display a list of moves commonly used by Jirachi in the gen3ou tier, weighted by the closest available skill value to 1700 (likely 1760).  
 
-    go run --forcePathGen Dodrio nu 2
+    go run . --forcePathGen Dodrio nu 2
 This command would display a list of moves commonly used by Dodrio in the gen8nu tier, weighted by the second-highest available skill value (likely 1630). It would skip attempting to guess the correct path for the file we want and instead immediately walk the folder tree from https://www.smogon.com/stats/ to find it. 
 
 # TBA
