@@ -33,18 +33,35 @@ func showMoveData(args []string, flags []int64) {
 		overrideURL: urlOverride,
 	}
 
-	// Construct a URL to get the stat txt file from
-	statsURL, err := constructStatURL("moves", movesPathSpec)
-	if err != nil {
-		fmt.Printf("Error constructing stat URL: %e", err)
-		return
-	}
-	// Get the raw stat data in txt format
+	// First attempt to guess the correct URL for the stats we want
+	statsURL := guessStatURL("moves", movesPathSpec)
+
+	// Try to get stats from that URL
 	resp, err := http.Get(statsURL)
 	if err != nil {
-		fmt.Printf("Error getting stats file: %e", err)
+		fmt.Printf("Error getting stats file at guessed URL: %e", err)
 		return
 	}
+
+	// if not found, try building URL by walking folder structure
+	if resp.StatusCode == 404 && movesPathSpec.overrideURL == "" {
+		resp.Body.Close()
+
+		fmt.Printf("404 error with guessed URL %s, trying to construct it instead\n", statsURL)
+
+		statsURL, err = constructStatURL("moves", movesPathSpec)
+		if err != nil {
+			fmt.Printf("Error constructing stat URL: %e", err)
+			return
+		}
+
+		resp, err = http.Get(statsURL)
+		if err != nil {
+			fmt.Printf("Error getting stats file at construct URL: %e", err)
+			return
+		}
+	}
+
 	defer resp.Body.Close()
 
 	// Parse out the move data we're interested in
@@ -69,6 +86,7 @@ func showMoveData(args []string, flags []int64) {
 
 	if !foundPokemon {
 		fmt.Printf("Could not find stats for those parameters. Was %s used at least one time in that tier and skill bracket?\n", pokemon)
+		return
 	}
 
 	// Print move data to the terminal

@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 )
@@ -34,13 +34,62 @@ func modeFolderPath(mode string) string {
 	}
 }
 
+// guessStatURL tries to guess the location of a stat file based on preknowledge of the filepaths
+func guessStatURL(mode string, spec *pathSpec) string {
+	if spec.overrideURL != "" {
+		fmt.Printf("Using override URL: %s\n", spec.overrideURL)
+		return spec.overrideURL
+	}
+
+	dateGuess := guessStatDate(time.Now().UTC())
+
+	modeFolder := modeFolderPath(mode)
+
+	filenameGuess := guessFilename(spec)
+
+	return statBaseURL + "/" + dateGuess + modeFolder + filenameGuess
+}
+
+// guessStatDate takes a time and returns a string representation of the estimated month that the latest stats are available for
+// new stats are uploaded on the 1st, 2nd or 3rd of the month, but usually late on the 1st
+func guessStatDate(statTime time.Time) string {
+	pathTimeFormat := "2006-01/"
+
+	day := statTime.Day()
+
+	if day < 2 { // if first of the month, jump back 48 hours to last month
+		statTime = statTime.Add(-time.Hour * 48)
+	}
+
+	// We always jump back one month and a day to account for stats for one months being released the next
+	statTime = statTime.AddDate(0, -1, -1)
+
+	return statTime.Format(pathTimeFormat)
+}
+
+// guessFilename takes a pathspec struct pointer and returns a string containing the estimated name of the file with stats we want
+func guessFilename(spec *pathSpec) string {
+	ratingsForWeightings := []int64{0, 1500, 1630, 1760}
+
+	if spec.tier == overused {
+		// The overused tier has many more players that all others, and the skill threshold for the upper two weightings is thus higher
+		ratingsForWeightings[2], ratingsForWeightings[3] = 1695, 1825
+	}
+
+	ratingString := ""
+	if spec.weighting < 4 {
+		ratingString = fmt.Sprintf("%d", ratingsForWeightings[spec.weighting])
+	} else {
+		closestWeighting := closestIndex(ratingsForWeightings, spec.weighting)
+		ratingString = fmt.Sprintf("%d", ratingsForWeightings[closestWeighting])
+	}
+
+	return spec.format() + "-" + ratingString + ".txt"
+}
+
 // constructStatURL takes a mode string and a flags struct and returns a string containing the URL
 // of the stat file we want to pull from
 func constructStatURL(mode string, spec *pathSpec) (string, error) {
-	if spec.overrideURL != "" {
-		fmt.Printf("Using override URL: %s\n", spec.overrideURL)
-		return spec.overrideURL, nil
-	}
 
 	// Parse base stats page to establish available dates
 	dateString, err := getLatestStatDate(spec)
@@ -142,12 +191,7 @@ func fileForWeighting(files []string, spec *pathSpec) (string, error) {
 	}
 
 	// find index with rating most closely matching that provided
-	closestIndex := 0
-	for i, rating := range ratings {
-		if math.Abs(float64(rating-spec.weighting)) < float64(closestIndex) {
-			closestIndex = i
-		}
-	}
+	fileIndex := closestIndex(ratings, spec.weighting)
 
-	return files[closestIndex], nil
+	return files[fileIndex], nil
 }
