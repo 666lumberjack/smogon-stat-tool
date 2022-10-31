@@ -22,7 +22,7 @@ func showMoveData(args []string, flags []int64) {
 	if weighting > 4 {
 		fmt.Printf("Common moves for %s in %s%s near specified weighting %d:\n", pokemon, generation, tier, weighting)
 	} else {
-		fmt.Printf("Common moves for %s in %s%s at give skill weighting %s:\n", pokemon, generation, tier, weightingTierName(weighting))
+		fmt.Printf("Common moves for %s in %s%s at given skill weighting %s:\n", pokemon, generation, tier, weightingTierName(weighting))
 	}
 
 	movesPathSpec := &pathSpec{
@@ -33,19 +33,27 @@ func showMoveData(args []string, flags []int64) {
 		overrideURL: urlOverride,
 	}
 
-	// First attempt to guess the correct URL for the stats we want
-	statsURL := guessStatURL("moves", movesPathSpec)
+	var statsURL string
+	var resp *http.Response
+	var err error
 
-	// Try to get stats from that URL
-	resp, err := http.Get(statsURL)
-	if err != nil {
-		fmt.Printf("Error getting stats file at guessed URL: %e", err)
-		return
+	// First attempt to guess the correct URL for the stats we want, unless forcePathGen is true
+	if !contains(flags, forcePathGen) {
+		statsURL = guessStatURL("moves", movesPathSpec)
+
+		// Try to get stats from that URL
+		resp, err = http.Get(statsURL)
+		if err != nil {
+			fmt.Printf("Error getting stats file at guessed URL: %e", err)
+			return
+		}
 	}
 
 	// if not found, try building URL by walking folder structure
-	if resp.StatusCode == 404 && movesPathSpec.overrideURL == "" {
-		resp.Body.Close()
+	if contains(flags, forcePathGen) || (resp.StatusCode == 404 && movesPathSpec.overrideURL == "") {
+		if !contains(flags, forcePathGen) {
+			resp.Body.Close() // If we attempted to request with a guessed URL but failed, close that response
+		}
 
 		fmt.Printf("404 error with guessed URL %s, trying to construct it instead\n", statsURL)
 
